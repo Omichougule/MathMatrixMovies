@@ -14,13 +14,25 @@ load_dotenv()
 
 
 def extract_code_blocks(text):
-    # Regular expression pattern to find code blocks surrounded by triple backticks
+    # Purpose: To extract Python code blocks enclosed in markdown-style triple backticks from a given text.
+    #
+    # Regular expression pattern: r"```python(.*?)```"
+    # - ```python: Matches the literal characters "```python", indicating the start of a Python code block.
+    # - (.*?): This is the capturing group.
+    #   - .: Matches any character (except newline by default).
+    #   - *: Matches the previous character zero or more times.
+    #   - ?: Makes the '*' quantifier non-greedy, meaning it matches as few characters as possible
+    #        while still allowing the overall pattern to match. This is important for correctly
+    #        handling multiple code blocks in the same text.
+    # - ```: Matches the literal characters "```", indicating the end of the code block.
     pattern = r"```python(.*?)```"
 
-    # Using re.DOTALL to make the dot match newlines as well
+    # re.DOTALL: This flag makes the '.' special character in the pattern match any character at all,
+    # including a newline. This is essential for capturing multi-line code blocks.
     matches = re.findall(pattern, text, re.DOTALL)
 
-    # 'matches' will be a list of all the code blocks found in the text
+    # Returns a list of strings. Each string in the list is an extracted code block
+    # (the content within ```python ... ```), without the surrounding fences.
     return matches
 
 
@@ -30,29 +42,91 @@ genai.configure(api_key=GOOGLE_API_KEY)
 
 
 def parse_arguments():
+    # Purpose: To handle command-line arguments when the script is run directly from the terminal.
+    # This allows users to specify video generation parameters without using the Streamlit UI.
+    # Note: This function is primarily for standalone script usage;
+    # when used as a module by ui.py, these parameters are passed as function arguments to create_math_matrix_movie.
+
+    # Initialize ArgumentParser with a description of the script.
     parser = argparse.ArgumentParser(
         description="Generate a math movie based on the given problem, audience age, and language."
     )
+
+    # Argument: --math_problem
+    # Purpose: To specify the math problem or concept the video should explain.
+    # Default: "Explain the pythagorean theorem" if not provided.
     parser.add_argument("--math_problem", type=str, default="Explain the pythagorean theorem",
                         help="The math problem to be visualized in the movie.")
+
+    # Argument: --audience_type
+    # Purpose: To specify the target audience's age for the video, influencing complexity and style.
+    # Default: 10 (representing 10 years old) if not provided.
     parser.add_argument("--audience_type", type=int, default=10,
                         help="The target audience age for the math movie.")
+
+    # Argument: --language
+    # Purpose: To set the language for the video's narration.
+    # Default: "English" if not provided.
     parser.add_argument("--language", type=str, default="English",
                         help="The language for the movie narration (default is English).")
+
+    # Argument: --voice_label
+    # Purpose: To specify the Azure Speech Service voice label for the narration.
+    # Default: "en-US-AriaNeural" (a specific English US voice) if not provided.
     parser.add_argument("--voice_label", type=str, default="en-US-AriaNeural",
                         help="The voice label for the narration (default is en-US-AriaNeural).")
+
+    # Parses the arguments provided from the command line (e.g., python create_movie.py --math_problem "Calculus").
     args = parser.parse_args()
+
+    # Returns the parsed arguments as a tuple.
     return args.math_problem, args.audience_type, args.language, args.voice_label
 
 
 def main():
+    # This is the main function called when the script is executed directly
+    # (e.g., `python create_movie.py --math_problem "Calculus"`).
+    # It's intended for testing or standalone video generation from the command line.
+
+    # Parses command-line arguments to get video parameters.
+    # The following line is commented out in the current version of the script.
     # math_problem, audience_type, language, voice_label = parse_arguments()
-    print(f"Math Problem: {math_problem}")
-    print(f"Audience Type: {audience_type}")
-    print(f"Language: {language}")
-    print(f"Voice Label: {voice_label}")
+
+    # Prints the obtained parameters to the console.
+    # These lines are commented out as they depend on the parse_arguments() call above.
+    # print(f"Math Problem: {math_problem}")
+    # print(f"Audience Type: {audience_type}")
+    # print(f"Language: {language}")
+    # print(f"Voice Label: {voice_label}")
+
+    # Note: The primary functionality of this module is usually accessed by calling
+    # the `create_math_matrix_movie` function from another script (e.g., the Streamlit UI in `ui.py`),
+    # not by running this `main` function directly in its current commented-out state.
+    pass # The function effectively does nothing as its operational content is commented out.
 
 
+# MOVIE_PROMPT:
+# This is the primary prompt template used to instruct the Generative AI (Gemini)
+# on how to create the Manim Python script for the math explanation video.
+#
+# Key Placeholders:
+# - {math_problem}: The specific math concept to be explained (e.g., "Pythagorean theorem").
+# - {audience_type}: The target audience, often an age (e.g., "10 year old"), to tailor complexity and style.
+# - {language}: The desired language for narration (e.g., "English", "Spanish").
+# - {voice_label}: The specific voice to be used for Azure Text-to-Speech (e.g., "en-US-AriaNeural").
+#
+# Core Instructions to the AI within this prompt:
+# - Generate Manim code for a visual and interesting explanation of the {math_problem} for the {audience_type}.
+# - Use only Manim's built-in capabilities for all visuals; strictly avoid external files like SVGs, MP3s, or other graphics.
+# - Incorporate voiceovers for all narration using `manim_voiceover.services.azure.AzureService`,
+#   with the specified {language} and {voice_label}. An example of voiceover usage is provided within the prompt.
+# - Ensure proper visual layout: content should be centered or attractively laid out, considering margins.
+#   Long sentences in text should be wrapped.
+# - Include actual numbers and mathematical formulas where appropriate to facilitate learning.
+# - Adhere to good video design principles: elements should fade out appropriately to prevent artifacts;
+#   diagrams and text should be clearly labeled and positioned to avoid overlaps or occlusion.
+# - If the input {math_problem} is nonsensical or obviously incorrect, the AI is instructed not to generate code.
+# - The final output must be a single, complete Python code block for Manim, ready to be executed directly.
 MOVIE_PROMPT = """
 
 Can you explain {math_problem} to a {audience_type}? Please be visual and interesting. Consider using a meme if the audience is younger.
@@ -129,84 +203,192 @@ Take a deep breath and consider all the requirements carefully, then write the c
 
 """
 
-
+# TRANSLATION_PROMPT:
+# This prompt template is designed to instruct the AI to take an existing Manim script
+# (presumably with narration in a source language like English) and translate the narration text
+# into the specified target {language}. It also instructs the AI to update the
+# Azure TTS {voice_label} to match the new language.
+#
+# Placeholders:
+# - {language}: The target language for translation (e.g., "Spanish").
+# - {voice_label}: The Azure TTS voice label appropriate for the target {language} (e.g., "es-ES-ElviraNeural").
+#
+# Note: This prompt is not actively used in the main `create_math_matrix_movie` workflow,
+# which handles language selection directly in the MOVIE_PROMPT. However, it's available
+# for potential future features, such as translating already generated scripts.
 TRANSLATION_PROMPT = """
 Ok. now translate the text to {language}, and replace the voice_label for azureservice with {voice_label}. Please write ALL the code in one go so that it can be extracted and run directly.
 """
 
+# Example lines for using specific fonts if needed, though the main prompt discourages non-standard dependencies.
 #       hindi_text = Text('नमस्ते', font='Lohit Devanagari')  # Replace 'Lohit Devanagari' with any available Hindi font
 #        tamil_text = Text('வணக்கம்', font='Lohit Tamil')  # Replace 'Lohit Tamil' with any available Tamil font
 # Create or cleanup existing extracted image frames directory.
 
 
 def create_frame_output_dir(output_dir):
+    # Ensures that the directory specified for storing extracted video frames exists.
+    # If the directory does not exist, it will be created.
+
+    # Check if the directory path already exists.
     if not os.path.exists(output_dir):
+        # If not, create the directory.
+        # os.makedirs will create any necessary parent directories in the path as well if they don't exist.
         os.makedirs(output_dir)
 
 
+# FRAME_PREFIX: A constant prefix used in the filenames of extracted frames.
 FRAME_PREFIX = "_frame"
 
 
 def extract_frame_from_video(video_file_path, frame_extraction_directory):
+    # Purpose: Extracts individual frames from a given video file and saves them as JPEG images
+    # in a specified directory. The extraction rate is determined dynamically based on video
+    # duration to obtain a manageable number of frames for AI analysis.
+
     print(
-        f"Extracting {video_file_path} at 1 frame per second. This might take a bit...")
+        f"Extracting frames from {video_file_path}. This might take a bit..."
+    )
+
+    # Ensure the output directory for frames exists, creating it if necessary.
     create_frame_output_dir(frame_extraction_directory)
+
+    # --- Video Initialization and Properties ---
+    # Open the video file using OpenCV.
     vidcap = cv2.VideoCapture(video_file_path)
+    # Get the frames per second (FPS) of the video.
     fps = vidcap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = total_frames / fps
+    # Get the total number of frames in the video.
+    total_frames_in_video = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Calculate the total duration of the video in seconds.
+    duration = total_frames_in_video / fps
 
-    # Calculate the ideal number of frames to extract
-    max_frames = 60  # Maximum number of frames to extract
+    # --- Frame Extraction Rate Logic ---
+    # Set a target maximum number of frames to extract for AI analysis.
+    max_target_frames = 60
     if duration <= 60:
-        frame_extraction_rate = 1  # 1 fps for videos under 60 seconds
+        # For videos 60 seconds or shorter, the target is to extract a frame every 1 second.
+        # frame_extraction_interval_seconds defines the interval in seconds between frame captures.
+        frame_extraction_interval_seconds = 1
     else:
-        frame_extraction_rate = max(1, int(total_frames / max_frames))
+        # For longer videos, calculate an interval in seconds to get close to max_target_frames.
+        # This aims to distribute the max_target_frames roughly evenly across the video duration.
+        frame_extraction_interval_seconds = max(1, int(duration / max_target_frames))
 
+    # --- Frame Processing Loop ---
+    # Prepare a prefix for output filenames, derived from the video file's name.
     output_file_prefix = os.path.basename(video_file_path).replace('.', '_')
-    frame_count = 0
-    count = 0
+    saved_frames_count = 0  # Counter for successfully saved frames.
+    processed_frames_count = 0 # Counter for frames processed from the video.
+
     while vidcap.isOpened():
-        success, frame = vidcap.read()
-        if not success:  # End of video
+        # Read the next frame. 'success' is a boolean, 'frame_image' is the image data.
+        success, frame_image = vidcap.read()
+        if not success:  # If no frame is returned (e.g., end of video or error).
             break
-        if count % frame_extraction_rate == 0:  # Extract a frame at the calculated rate
-            # Calculate the actual time for the frame
-            time_in_seconds = count / fps
-            min = int(time_in_seconds // 60)
-            sec = int(time_in_seconds % 60)
-            time_string = f"{min:02d}:{sec:02d}"
+
+        # Current time in seconds for the processed frame.
+        current_time_seconds = processed_frames_count / fps
+
+        # Check if the current frame should be saved based on the calculated interval.
+        # This condition saves a frame if its second mark is a multiple of frame_extraction_interval_seconds.
+        if int(current_time_seconds) % frame_extraction_interval_seconds == 0:
+            # To avoid saving multiple frames for the same second mark if FPS > 1,
+            # we check if a frame for this second mark has already been saved.
+            # This is implicitly handled if only one frame per second mark is processed by this check,
+            # or more explicitly, one could track the last_saved_second.
+            # For simplicity, this code might save the first frame encountered for a target second.
+
+            # Format the timestamp (MM:SS) for the current frame's filename.
+            minutes = int(current_time_seconds // 60)
+            seconds = int(current_time_seconds % 60)
+            time_string = f"{minutes:02d}:{seconds:02d}"
+
+            # Construct the full path and filename for the extracted frame.
             image_name = f"{output_file_prefix}{FRAME_PREFIX}{time_string}.jpg"
             output_filename = os.path.join(
                 frame_extraction_directory, image_name)
-            cv2.imwrite(output_filename, frame)
-            frame_count += 1
-        count += 1
+
+            # Save the current frame_image as a JPEG image.
+            # Check if a frame for this specific time_string already exists to avoid duplicates from high FPS videos.
+            if not os.path.exists(output_filename): # Prevents overwriting if multiple frames fall into the same second tick
+                cv2.imwrite(output_filename, frame_image)
+                saved_frames_count += 1
+
+        processed_frames_count += 1
+
+    # --- Cleanup and Return ---
+    # Release the video capture object.
     vidcap.release()
     print(
-        f"Completed video frame extraction!\n\nExtracted: {frame_count} frames at a rate of {frame_extraction_rate} frames per second.")
-    return {"video_duration": duration, "frame_count": frame_count, "frame_extraction_rate": frame_extraction_rate}
+        f"Completed video frame extraction!\n\nExtracted: {saved_frames_count} frames.")
+
+    # Return statistics about the extraction process.
+    # 'frame_count' here refers to the number of frames actually saved.
+    # 'frame_extraction_rate' refers to the interval in seconds.
+    return {"video_duration": duration, "frame_count": saved_frames_count, "frame_extraction_rate": frame_extraction_interval_seconds}
 
 
 class File:
+    # Represents a file, typically an extracted video frame, intended for upload to a generative AI service.
+    # It stores the file's local path, an optional display name, a timestamp (often derived from video time
+    # encoded in the filename), and later, the response from the AI service after the file has been uploaded.
+
     def __init__(self, file_path: str, display_name: str = None):
-        self.file_path = file_path
+        # Initializes a File object.
+        #
+        # Args:
+        #     file_path (str): The local path to the file.
+        #     display_name (str, optional): An optional name for display purposes. Defaults to None.
+
+        self.file_path = file_path  # Path to the file on the local filesystem.
         if display_name:
-            self.display_name = display_name
+            self.display_name = display_name # Optional display name for the file.
+
+        # Extracts a timestamp from the filename (e.g., "MM:SS" part).
+        # Assumes the filename contains a timestamp parsable by the `get_timestamp` function.
         self.timestamp = get_timestamp(file_path)
 
+        # This attribute will hold the response from the AI service after the file is uploaded.
+        # It's typically an object or reference that the AI service uses to access the content of the uploaded file.
+        self.response = None
+
     def set_file_response(self, response):
+        # Stores the response received from the AI service (e.g., Google's genai API) after uploading this file.
+        # This response is necessary to refer to the uploaded file in subsequent AI model prompts.
+        #
+        # Args:
+        #     response: The response object or data from the `genai.upload_file()` call.
         self.response = response
 
 
 def get_timestamp(filename):
-    """Extracts the frame count (as an integer) from a filename with the format
-       'output_file_prefix_frame00:00.jpg'.
-    """
+    # Extracts a timestamp string (e.g., "00:00" for MM:SS format) from a frame's filename.
+    # It assumes filenames are formatted similarly to 'output_file_prefix_frameMM:SS.jpg',
+    # where `FRAME_PREFIX` (a global variable, e.g., "_frame") acts as a key delimiter.
+
+    # Split the filename string by the FRAME_PREFIX.
+    # For an expected filename like "some_video_mp4_frame01:23.jpg":
+    # parts[0] would be "some_video_mp4"
+    # parts[1] would be "01:23.jpg"
     parts = filename.split(FRAME_PREFIX)
+
+    # Validate if the FRAME_PREFIX was found exactly once, implying correct basic structure.
     if len(parts) != 2:
-        return None  # Indicates the filename might be incorrectly formatted
-    return parts[1].split('.')[0]
+        # If FRAME_PREFIX is not found or found multiple times, the filename format is unexpected.
+        # Print an error or log this for debugging if necessary.
+        # print(f"Warning: Unexpected filename format for timestamp extraction: {filename}")
+        return None  # Indicates that a timestamp could not be parsed.
+
+    # Take the second part (e.g., "01:23.jpg") and split it by the dot '.'
+    # to separate the timestamp from the file extension.
+    # timestamp_and_extension[0] would be "01:23"
+    # timestamp_and_extension[1] would be "jpg"
+    timestamp_and_extension = parts[1].split('.')
+
+    # The first part of this split should be the timestamp string.
+    # No further validation is done here on the format of the timestamp itself (e.g., ensuring it's ##:##).
+    return timestamp_and_extension[0]
 
 
 def create_python_file(response):
